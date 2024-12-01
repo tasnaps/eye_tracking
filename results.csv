@@ -1,0 +1,6 @@
+qnr,selected,actual_ai,correct,total_time_spent
+1,Text A,Text A,True,1.5996909141540527
+2,Text B,Text B,True,1.0919947624206543
+3,Text B,Text B,True,0.6553528308868408
+4,Text B,Text B,True,0.31150317192077637
+5,Text B,Text A,False,0.25803136825561523

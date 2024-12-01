@@ -1,0 +1,11 @@
+qnr,text,ai,topic
+1,"Cell biology involves the study of cells, their structure, function, and interactions with the environment.",True,biology
+1,"Cell biology is a branch of biology focusing on the structure and function of the cell.",False,biology
+2,"Photosynthesis is the process by which plants convert light energy into chemical energy.",True,biology
+2,"Photosynthesis converts sunlight, carbon dioxide, and water into glucose and oxygen in plants.",False,biology
+3,"The human heart pumps blood through the circulatory system, supplying oxygen and nutrients.",True,medicine
+3,"The heart is a muscular organ that maintains blood circulation by pumping blood throughout the body.",False,medicine
+4,"Quantum mechanics studies the behavior of particles at the atomic and subatomic level.",True,physics
+4,"Quantum mechanics explains phenomena at microscopic scales, such as particles and waves.",False,physics
+5,"Machine learning enables computers to learn from data and make decisions without explicit programming.",True,technology
+5,"Machine learning is a subset of AI where models learn patterns from data to make predictions.",False,technology
