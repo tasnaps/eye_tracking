@@ -1,9 +1,12 @@
+# main.py
+
 import random
 import pandas as pd
 import pygame
 import csv
 import time
 from screeninfo import get_monitors
+import hengam  # Import the hengam package
 
 # Initialize pygame
 pygame.init()
@@ -11,14 +14,14 @@ pygame.init()
 # Constants
 first_monitor = get_monitors()[0]
 SCREEN_WIDTH, SCREEN_HEIGHT = first_monitor.width, first_monitor.height
-FONT_SIZE = 32
+FONT_SIZE = 38
 FONT_COLOR = (0, 0, 0)
 BG_COLOR = (255, 255, 255)
 MARGIN = 50
-LINE_SPACING = 10
+LINE_SPACING = 15
 
 # Setup screen
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 pygame.display.set_caption("Text Comparison Study")
 font = pygame.font.Font(None, FONT_SIZE)
 
@@ -53,8 +56,8 @@ def render_text(screen, text, x, y, font, max_width):
 # Load CSV data
 def load_questions(csv_file):
     questions = {}
-    with open(csv_file, 'r') as file:
-        reader = csv.DictReader(file)
+    with open(csv_file, 'r', encoding="utf-8") as file:
+        reader = csv.DictReader(file, delimiter='\t')
         for row in reader:
             qnr = int(row["qnr"])
             if qnr not in questions:
@@ -66,67 +69,16 @@ def load_questions(csv_file):
             })
     return questions
 
-# Mock EyeTracker class
-class MockEyeTracker:
-    def __init__(self, screen_width, screen_height, license_key, text_regions):
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.license_key = license_key
-        self.is_recording = False
-        self.data_buffer = []
-        self.start_time = None
-        self.text_regions = text_regions  # List of text regions
-
-    def isLicenseValid(self):
-        # Simulate license validation
-        return True
-
-    def clearDataBuffer(self):
-        self.data_buffer = []
-
-    def start(self):
-        self.is_recording = True
-        self.start_time = time.time()
-
-    def pause(self):
-        self.is_recording = False
-
-    def stop(self):
-        self.is_recording = False
-
-    def update(self):
-        if self.is_recording and self.text_regions:
-            # Simulate gaze data within text regions
-            timestamp = time.time() - self.start_time
-
-            # Randomly select a text region (simulate reading)
-            region = random.choice(self.text_regions)
-            x_min, y_min, x_max, y_max = region
-
-            x = random.uniform(x_min, x_max)
-            y = random.uniform(y_min, y_max)
-
-            validity = random.choice([0, 1])  # 0 for valid, 1 for invalid
-            self.data_buffer.append({
-                'timestamp': timestamp,
-                'x': x,
-                'y': y,
-                'validity': validity
-            })
-            # Simulate sampling rate (e.g., 60 Hz)
-            time.sleep(1 / 60)
-
-    def getFormattedData(self):
-        # Return the data buffer
-        return self.data_buffer
-
 # Main loop to display questions
 def display_questions(questions):
     bounding_boxes = []
     results = []
     gaze_data_all = []  # To store all gaze data
 
-    for qnr in sorted(questions.keys()):
+    question_numbers = list(questions.keys())
+    random.shuffle(question_numbers)
+
+    for qnr in question_numbers:
         texts = questions[qnr]
 
         # Randomize the order of texts
@@ -180,8 +132,14 @@ def display_questions(questions):
             )
             text_regions.append(text_region)
 
-        # Initialize the eye tracker with text regions
-        tracker = MockEyeTracker(SCREEN_WIDTH, SCREEN_HEIGHT, "dummy_license_key", text_regions)
+        # Initialize the eye tracker with your custom package
+        LICENSE_KEY = "int.lab2024"
+        try:
+            tracker = hengam.EyeTracker(SCREEN_WIDTH, SCREEN_HEIGHT, 0.0, LICENSE_KEY)
+        except RuntimeError as e:
+            print(f"Failed to initialize EyeTracker: {e}")
+            pygame.quit()
+            return bounding_boxes, results, gaze_data_all
 
         if not tracker.isLicenseValid():
             print("License is invalid or expired. Exiting...")
@@ -190,7 +148,14 @@ def display_questions(questions):
 
         # Clear the data buffer before starting recording
         tracker.clearDataBuffer()
-        tracker.start()  # Start eye-tracking
+
+        # Start eye-tracking
+        try:
+            tracker.start()
+        except RuntimeError as e:
+            print(f"Error starting eye tracker: {e}")
+            pygame.quit()
+            return bounding_boxes, results, gaze_data_all
 
         # Create selection buttons
         button_font = pygame.font.Font(None, 32)
@@ -222,7 +187,15 @@ def display_questions(questions):
         selected_text = None
 
         while not selection_made:
-            tracker.update()  # Update eye-tracking data
+            # Update eye-tracking data
+            try:
+                tracker.update()
+            except RuntimeError as e:
+                print(f"Error during recording: {e}")
+                tracker.stop()
+                pygame.quit()
+                return bounding_boxes, results, gaze_data_all
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     tracker.stop()
@@ -244,13 +217,20 @@ def display_questions(questions):
         # Participant made a selection; end timing
         end_time = time.time()
         total_time_spent = end_time - start_time
-        tracker.stop()  # Stop eye-tracking
+
+        # Stop eye-tracking
+        tracker.stop()
 
         # Fetch gaze data for this question
-        gaze_data = tracker.getFormattedData()
-        for data_point in gaze_data:
-            data_point['qnr'] = qnr  # Associate gaze data with question number
-        gaze_data_all.extend(gaze_data)
+        try:
+            results_data = tracker.getFormattedData()
+            for data_point in results_data:
+                data_point['qnr'] = qnr  # Associate gaze data with question number
+            gaze_data_all.extend(results_data)
+        except RuntimeError as e:
+            print(f"Error fetching data: {e}")
+            pygame.quit()
+            return bounding_boxes, results, gaze_data_all
 
         # Record results
         selected_ai = selected_text
@@ -279,7 +259,7 @@ def display_questions(questions):
 
 # Save bounding boxes to a CSV
 def save_bounding_boxes(bounding_boxes, output_file):
-    with open(output_file, 'w', newline='') as file:
+    with open(output_file, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         writer.writerow(["qnr", "label", "ai", "topic", "word", "top_left", "bottom_right"])
         for data in bounding_boxes:
@@ -296,7 +276,7 @@ def save_bounding_boxes(bounding_boxes, output_file):
 
 # Save results to a CSV
 def save_results(results, output_file):
-    with open(output_file, 'w', newline='') as file:
+    with open(output_file, 'w', newline='', encoding='utf-8') as file:
         fieldnames = ["qnr", "selected", "actual_ai", "correct", "total_time_spent"]
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
@@ -316,7 +296,7 @@ def save_gaze_data(gaze_data_all, output_file):
 
 # Main function
 def main():
-    csv_file = "questions.csv"  # Input CSV file
+    csv_file = "realSurveyQuestions.csv"  # Input CSV file
     bounding_boxes_file = "bounding_boxes.csv"  # Output CSV file for bounding boxes
     results_file = "results.csv"  # Output CSV file for participant selections
     gaze_data_file = "gaze_data.csv"  # Output CSV file for gaze data
