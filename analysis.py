@@ -18,11 +18,11 @@ gaze_data = pd.read_csv('gaze_data.csv')
 # Flip the y-coordinate to match the plotting coordinate system
 gaze_data['y'] = SCREEN_HEIGHT - gaze_data['y']
 
-# Filter valid gaze data (validity == 0)
-valid_gaze_data = gaze_data[gaze_data['validity'] == 0]
+# Filter valid gaze data (validity == 'Valid')
+valid_gaze_data = gaze_data[gaze_data['validity'] == 'Valid'].copy()
 
 # Ensure 'qnr' is integer type
-valid_gaze_data['qnr'] = valid_gaze_data['qnr'].astype(int)
+valid_gaze_data.loc[:, 'qnr'] = valid_gaze_data['qnr'].astype(int)
 
 print(valid_gaze_data[['x', 'y']].describe())
 
@@ -53,60 +53,51 @@ bounding_boxes['y_min'], bounding_boxes['y_max'] = (
 )
 
 # Ensure 'qnr' is integer type
-bounding_boxes['qnr'] = bounding_boxes['qnr'].astype(int)
+bounding_boxes.loc[:, 'qnr'] = bounding_boxes['qnr'].astype(int)
 
 print(bounding_boxes[['x_min', 'y_min', 'x_max', 'y_max']].describe())
 print(bounding_boxes[['top_left', 'bottom_right']].head())
 
-# Filter valid gaze data
-valid_gaze_data = gaze_data[gaze_data['validity'] == 0]
-
 # Function to match gaze points to words
 def match_gaze_to_words(gaze_data, bounding_boxes):
     matched_data = []
-
-    # Group gaze data and bounding boxes by question number
     grouped_gaze = gaze_data.groupby('qnr')
     grouped_boxes = bounding_boxes.groupby('qnr')
 
     for qnr, gaze_group in grouped_gaze:
         if qnr not in grouped_boxes.groups:
+            print(f"No bounding boxes for question {qnr}")
             continue
 
-        # Get bounding boxes for this question
         boxes_qnr = bounding_boxes[bounding_boxes['qnr'] == qnr].reset_index()
-
-        # Create R-tree index of the bounding boxes
         idx = index.Index()
         for i, row in boxes_qnr.iterrows():
             idx.insert(i, (row['x_min'], row['y_min'], row['x_max'], row['y_max']), obj=row)
 
         for _, gaze_point in gaze_group.iterrows():
             point = Point(gaze_point['x'], gaze_point['y'])
-            # Find possible matches
             possible_matches = list(idx.intersection((gaze_point['x'], gaze_point['y'], gaze_point['x'], gaze_point['y']), objects=True))
-            matched = False
-            for item in possible_matches:
-                row = item.object
-                word_box = box(row['x_min'], row['y_min'], row['x_max'], row['y_max'])
-                if word_box.contains(point):
-                    matched_data.append({
-                        'qnr': qnr,
-                        'timestamp': gaze_point['timestamp'],
-                        'x': gaze_point['x'],
-                        'y': gaze_point['y'],
-                        'word': row['word'],
-                        'label': row['label'],  # Text A or Text B
-                        'ai': row['ai'],
-                        'topic': row['topic']
-                    })
-                    matched = True
-                    break  # Stop after the first match
-            if not matched:
-                # Gaze point did not match any word
+
+            if possible_matches:
+                for item in possible_matches:
+                    row = item.object
+                    word_box = box(row['x_min'], row['y_min'], row['x_max'], row['y_max'])
+                    if word_box.contains(point):
+                        matched_data.append({
+                            'qnr': qnr,
+                            'timestamp': gaze_point['timestamp_us'],
+                            'x': gaze_point['x'],
+                            'y': gaze_point['y'],
+                            'word': row.get('word', None),
+                            'label': row.get('label', None),
+                            'ai': row.get('ai', None),
+                            'topic': row.get('topic', None)
+                        })
+                        break
+            else:
                 matched_data.append({
                     'qnr': qnr,
-                    'timestamp': gaze_point['timestamp'],
+                    'timestamp': gaze_point['timestamp_us'],
                     'x': gaze_point['x'],
                     'y': gaze_point['y'],
                     'word': None,
@@ -114,6 +105,7 @@ def match_gaze_to_words(gaze_data, bounding_boxes):
                     'ai': None,
                     'topic': None
                 })
+
     return pd.DataFrame(matched_data)
 
 # Perform the matching
@@ -123,7 +115,10 @@ matched_gaze_data = match_gaze_to_words(valid_gaze_data, bounding_boxes)
 matched_gaze_data.to_csv('matched_gaze_data.csv', index=False)
 
 # Filter out unmatched gaze points
-matched_gaze_points = matched_gaze_data.dropna(subset=['word'])
+if 'word' in matched_gaze_data.columns:
+    matched_gaze_points = matched_gaze_data.dropna(subset=['word'])
+else:
+    matched_gaze_points = pd.DataFrame(columns=matched_gaze_data.columns)
 
 # Count the number of gaze points per word
 word_focus_counts = matched_gaze_points.groupby(['qnr', 'label', 'word']).size().reset_index(name='gaze_count')
@@ -145,11 +140,10 @@ def plot_top_words(word_counts, qnr, label, top_n=5):
     plt.tight_layout()
     plt.show()
 
-#Todo Example usage
+# Example usage
 qnr = 1  # Question number
 plot_top_words(word_focus_counts, qnr, 'Text A')
 plot_top_words(word_focus_counts, qnr, 'Text B')
-
 
 def plot_gaze_and_boxes(qnr):
     # Filter data for the question
@@ -238,12 +232,12 @@ def detect_fixations_ivt(data, velocity_threshold):
     fixations = []
     current_fixation = []
 
-    data = data.sort_values('timestamp').reset_index(drop=True)
+    data = data.sort_values('timestamp_us').reset_index(drop=True)
 
     for i in range(len(data) - 1):
         dx = data.iloc[i + 1]['x'] - data.iloc[i]['x']
         dy = data.iloc[i + 1]['y'] - data.iloc[i]['y']
-        dt = data.iloc[i + 1]['timestamp'] - data.iloc[i]['timestamp']
+        dt = data.iloc[i + 1]['timestamp_us'] - data.iloc[i]['timestamp_us']
 
         if dt == 0:
             velocity = float('inf')
@@ -257,8 +251,8 @@ def detect_fixations_ivt(data, velocity_threshold):
                 fixation_df = pd.DataFrame(current_fixation)
                 centroid_x = fixation_df['x'].mean()
                 centroid_y = fixation_df['y'].mean()
-                start_time = fixation_df['timestamp'].min()
-                end_time = fixation_df['timestamp'].max()
+                start_time = fixation_df['timestamp_us'].min()
+                end_time = fixation_df['timestamp_us'].max()
                 fixations.append((start_time, end_time, centroid_x, centroid_y))
                 current_fixation = []
 
@@ -266,8 +260,8 @@ def detect_fixations_ivt(data, velocity_threshold):
         fixation_df = pd.DataFrame(current_fixation)
         centroid_x = fixation_df['x'].mean()
         centroid_y = fixation_df['y'].mean()
-        start_time = fixation_df['timestamp'].min()
-        end_time = fixation_df['timestamp'].max()
+        start_time = fixation_df['timestamp_us'].min()
+        end_time = fixation_df['timestamp_us'].max()
         fixations.append((start_time, end_time, centroid_x, centroid_y))
 
     return fixations
