@@ -14,11 +14,11 @@ pygame.init()
 # Constants
 first_monitor = get_monitors()[0]
 SCREEN_WIDTH, SCREEN_HEIGHT = first_monitor.width, first_monitor.height
-FONT_SIZE = 38
+FONT_SIZE = 40
 FONT_COLOR = (0, 0, 0)
 BG_COLOR = (255, 255, 255)
-MARGIN = 50
-LINE_SPACING = 15
+MARGIN = 28
+LINE_SPACING = 20
 
 # Setup screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
