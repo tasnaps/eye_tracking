@@ -7,16 +7,18 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from screeninfo import get_monitors
 import seaborn as sns
+import os
 
 # Constants
 first_monitor = get_monitors()[0]
 SCREEN_WIDTH, SCREEN_HEIGHT = first_monitor.width, first_monitor.height
 
+# Create a folder to store the plots
+output_folder = 'plots'
+os.makedirs(output_folder, exist_ok=True)
+
 # Load gaze data
 gaze_data = pd.read_csv('gaze_data.csv')
-
-# Flip the y-coordinate to match the plotting coordinate system
-gaze_data['y'] = SCREEN_HEIGHT - gaze_data['y']
 
 # Filter valid gaze data (validity == 'Valid')
 valid_gaze_data = gaze_data[gaze_data['validity'] == 'Valid'].copy()
@@ -41,16 +43,6 @@ bounding_boxes['x_min'] = bounding_boxes['top_left'].apply(lambda t: t[0])
 bounding_boxes['y_min'] = bounding_boxes['top_left'].apply(lambda t: t[1])
 bounding_boxes['x_max'] = bounding_boxes['bottom_right'].apply(lambda t: t[0])
 bounding_boxes['y_max'] = bounding_boxes['bottom_right'].apply(lambda t: t[1])
-
-# Flip the y-coordinates of bounding boxes
-bounding_boxes['y_min'] = SCREEN_HEIGHT - bounding_boxes['y_min']
-bounding_boxes['y_max'] = SCREEN_HEIGHT - bounding_boxes['y_max']
-
-# Swap y_min and y_max if necessary
-bounding_boxes['y_min'], bounding_boxes['y_max'] = (
-    np.minimum(bounding_boxes['y_min'], bounding_boxes['y_max']),
-    np.maximum(bounding_boxes['y_min'], bounding_boxes['y_max'])
-)
 
 # Ensure 'qnr' is integer type
 bounding_boxes.loc[:, 'qnr'] = bounding_boxes['qnr'].astype(int)
@@ -138,12 +130,18 @@ def plot_top_words(word_counts, qnr, label, top_n=5):
     plt.ylabel('Number of Gaze Points')
     plt.legend([f'Gaze counts for words in {label}'])
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.path.join(output_folder, f'top_words_q{qnr}_{label}.png'))
+    plt.close()
+
+# Plotting for all questions
+def plot_all_questions(word_counts, labels, top_n=5):
+    for qnr in word_counts['qnr'].unique():
+        for label in labels:
+            plot_top_words(word_counts, qnr, label, top_n)
 
 # Example usage
-qnr = 1  # Question number
-plot_top_words(word_focus_counts, qnr, 'Text A')
-plot_top_words(word_focus_counts, qnr, 'Text B')
+labels = ['Text A', 'Text B']
+plot_all_questions(word_focus_counts, labels)
 
 def plot_gaze_and_boxes(qnr):
     # Filter data for the question
@@ -159,7 +157,7 @@ def plot_gaze_and_boxes(qnr):
     ax = plt.gca()
     plt.scatter(gaze_qnr['x'], gaze_qnr['y'], color='blue', s=5, label='Gaze Points')
 
-    # Add bounding boxes
+    # Add bounding boxes and words
     for _, row in boxes_qnr.iterrows():
         rect = Rectangle(
             (row['x_min'], row['y_min']),
@@ -170,6 +168,9 @@ def plot_gaze_and_boxes(qnr):
             facecolor='none'
         )
         ax.add_patch(rect)
+        # Add word text inside the box
+        if 'word' in row:
+            plt.text(row['x_min'], row['y_min'], row['word'], color='black', fontsize=8, verticalalignment='top')
 
     # Set aspect ratio to equal to prevent stretching
     ax.set_aspect('equal', adjustable='box')
@@ -186,10 +187,16 @@ def plot_gaze_and_boxes(qnr):
     plt.ylabel('Y Coordinate')
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.path.join(output_folder, f'gaze_and_boxes_q{qnr}.png'))
+    plt.close()
+
+# Plotting for all questions
+def plot_all_gaze_and_boxes():
+    for qnr in valid_gaze_data['qnr'].unique():
+        plot_gaze_and_boxes(qnr)
 
 # Example usage
-plot_gaze_and_boxes(qnr)
+plot_all_gaze_and_boxes()
 
 def plot_raw_gaze(qnr):
     # Filter data for the question
@@ -203,14 +210,21 @@ def plot_raw_gaze(qnr):
     plt.legend()
     plt.gca().invert_yaxis()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.path.join(output_folder, f'raw_gaze_q{qnr}.png'))
+    plt.close()
 
-# Plot raw gaze data
-plot_raw_gaze(qnr)
+# Plotting for all questions
+def plot_all_raw_gaze():
+    for qnr in valid_gaze_data['qnr'].unique():
+        plot_raw_gaze(qnr)
+
+# Example usage
+plot_all_raw_gaze()
 
 def plot_gaze_heatmap(qnr):
     # Filter data for the question
     gaze_qnr = valid_gaze_data[valid_gaze_data['qnr'] == qnr]
+    boxes_qnr = bounding_boxes[bounding_boxes['qnr'] == qnr]
 
     plt.figure(figsize=(12, 8))
     sns.kdeplot(
@@ -218,15 +232,39 @@ def plot_gaze_heatmap(qnr):
         cmap='viridis', fill=True, alpha=0.7,
         bw_adjust=0.5, levels=100, thresh=0
     )
+
+    # Add bounding boxes and words
+    ax = plt.gca()
+    for _, row in boxes_qnr.iterrows():
+        rect = Rectangle(
+            (row['x_min'], row['y_min']),
+            row['x_max'] - row['x_min'],
+            row['y_max'] - row['y_min'],
+            linewidth=1,
+            edgecolor='red',
+            facecolor='none'
+        )
+        ax.add_patch(rect)
+        if 'word' in row:
+            plt.text(row['x_min'], row['y_min'], row['word'], color='black', fontsize=8, verticalalignment='top')
+
     plt.title(f'Gaze Heatmap for Question {qnr}')
     plt.xlabel('X Coordinate')
     plt.ylabel('Y Coordinate')
+    plt.xlim(0, SCREEN_WIDTH)
+    plt.ylim(0, SCREEN_HEIGHT)
     plt.gca().invert_yaxis()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.path.join(output_folder, f'gaze_heatmap_q{qnr}.png'))
+    plt.close()
 
-# Plot gaze heatmap
-plot_gaze_heatmap(qnr)
+# Plotting for all questions
+def plot_all_gaze_heatmaps():
+    for qnr in valid_gaze_data['qnr'].unique():
+        plot_gaze_heatmap(qnr)
+
+# Example usage
+plot_all_gaze_heatmaps()
 
 def detect_fixations_ivt(data, velocity_threshold):
     fixations = []
@@ -285,10 +323,18 @@ def plot_fixations(qnr, velocity_threshold=50):
     plt.title(f'Fixations Detected by I-VT for Question {qnr}')
     plt.xlabel('X Coordinate')
     plt.ylabel('Y Coordinate')
+    plt.xlim(0, SCREEN_WIDTH)
+    plt.ylim(0, SCREEN_HEIGHT)
     plt.legend()
     plt.gca().invert_yaxis()
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.path.join(output_folder, f'fixations_q{qnr}.png'))
+    plt.close()
 
-# Plot fixations
-plot_fixations(qnr)
+# Plotting for all questions
+def plot_all_fixations(velocity_threshold=50):
+    for qnr in valid_gaze_data['qnr'].unique():
+        plot_fixations(qnr, velocity_threshold)
+
+# Example usage
+plot_all_fixations()
