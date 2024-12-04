@@ -9,9 +9,9 @@ from screeninfo import get_monitors
 import seaborn as sns
 import os
 
-# Constants
+# Constants: The resolution should be same as the source of data resolution
 first_monitor = get_monitors()[0]
-SCREEN_WIDTH, SCREEN_HEIGHT = first_monitor.width, first_monitor.height
+SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
 
 # Create a folder to store the plots
 output_folder = 'plots'
@@ -141,7 +141,7 @@ def plot_all_questions(word_counts, labels, top_n=5):
 
 # Example usage
 labels = ['Text A', 'Text B']
-plot_all_questions(word_focus_counts, labels)
+#plot_all_questions(word_focus_counts, labels)
 
 def plot_gaze_and_boxes(qnr):
     # Filter data for the question
@@ -195,8 +195,7 @@ def plot_all_gaze_and_boxes():
     for qnr in valid_gaze_data['qnr'].unique():
         plot_gaze_and_boxes(qnr)
 
-# Example usage
-plot_all_gaze_and_boxes()
+#plot_all_gaze_and_boxes()
 
 def plot_raw_gaze(qnr):
     # Filter data for the question
@@ -218,8 +217,7 @@ def plot_all_raw_gaze():
     for qnr in valid_gaze_data['qnr'].unique():
         plot_raw_gaze(qnr)
 
-# Example usage
-plot_all_raw_gaze()
+#plot_all_raw_gaze()
 
 def plot_gaze_heatmap(qnr):
     # Filter data for the question
@@ -263,60 +261,81 @@ def plot_all_gaze_heatmaps():
     for qnr in valid_gaze_data['qnr'].unique():
         plot_gaze_heatmap(qnr)
 
-# Example usage
-plot_all_gaze_heatmaps()
+#plot_all_gaze_heatmaps()
 
 def detect_fixations_ivt(data, velocity_threshold):
+    """
+    Detect fixations using the I-VT algorithm.
+
+    Parameters:
+        data (pd.DataFrame): Gaze data sorted by timestamp with 'x', 'y', and 'timestamp_us'.
+        velocity_threshold (float): Threshold to determine fixation.
+
+    Returns:
+        list: Detected fixations as tuples (start_time, end_time, centroid_x, centroid_y).
+    """
     fixations = []
     current_fixation = []
 
+    # Ensure the data is sorted by timestamp
     data = data.sort_values('timestamp_us').reset_index(drop=True)
 
-    for i in range(len(data) - 1):
-        dx = data.iloc[i + 1]['x'] - data.iloc[i]['x']
-        dy = data.iloc[i + 1]['y'] - data.iloc[i]['y']
-        dt = data.iloc[i + 1]['timestamp_us'] - data.iloc[i]['timestamp_us']
+    for i in range(len(data)):
+        if i < len(data) - 1:  # For all points except the last
+            dx = data.iloc[i + 1]['x'] - data.iloc[i]['x']
+            dy = data.iloc[i + 1]['y'] - data.iloc[i]['y']
+            dt = data.iloc[i + 1]['timestamp_us'] - data.iloc[i]['timestamp_us']
 
-        if dt == 0:
-            velocity = float('inf')
-        else:
-            velocity = np.sqrt(dx**2 + dy**2) / dt
+            if dt == 0:
+                velocity = float('inf')
+            else:
+                velocity = np.sqrt(dx ** 2 + dy ** 2) / dt
 
-        if velocity <= velocity_threshold:
+            if velocity <= velocity_threshold:
+                current_fixation.append(data.iloc[i])
+            else:
+                if current_fixation:
+                    current_fixation.append(data.iloc[i])
+                    fixation_df = pd.DataFrame(current_fixation)
+                    centroid_x = fixation_df['x'].mean()
+                    centroid_y = fixation_df['y'].mean()
+                    start_time = fixation_df['timestamp_us'].min()
+                    end_time = fixation_df['timestamp_us'].max()
+                    fixations.append((start_time, end_time, centroid_x, centroid_y))
+                    current_fixation = []
+        else:  # Handle the last point
             current_fixation.append(data.iloc[i])
-        else:
-            if current_fixation:
-                fixation_df = pd.DataFrame(current_fixation)
-                centroid_x = fixation_df['x'].mean()
-                centroid_y = fixation_df['y'].mean()
-                start_time = fixation_df['timestamp_us'].min()
-                end_time = fixation_df['timestamp_us'].max()
-                fixations.append((start_time, end_time, centroid_x, centroid_y))
-                current_fixation = []
+            fixation_df = pd.DataFrame(current_fixation)
+            centroid_x = fixation_df['x'].mean()
+            centroid_y = fixation_df['y'].mean()
+            start_time = fixation_df['timestamp_us'].min()
+            end_time = fixation_df['timestamp_us'].max()
+            fixations.append((start_time, end_time, centroid_x, centroid_y))
 
-    if current_fixation:
-        fixation_df = pd.DataFrame(current_fixation)
-        centroid_x = fixation_df['x'].mean()
-        centroid_y = fixation_df['y'].mean()
-        start_time = fixation_df['timestamp_us'].min()
-        end_time = fixation_df['timestamp_us'].max()
-        fixations.append((start_time, end_time, centroid_x, centroid_y))
-
+    # Debugging: Print detected fixations
+    print(f"Detected {len(fixations)} fixations.")
     return fixations
 
 def plot_fixations(qnr, velocity_threshold=50):
     gaze_qnr = valid_gaze_data[valid_gaze_data['qnr'] == qnr]
+    boxes_qnr = bounding_boxes[bounding_boxes['qnr'] == qnr]
 
     fixations_ivt = detect_fixations_ivt(gaze_qnr, velocity_threshold)
     fixation_df_ivt = pd.DataFrame(fixations_ivt, columns=['start_time', 'end_time', 'centroid_x', 'centroid_y'])
 
     plt.figure(figsize=(12, 8))
+    ax = plt.gca()
+
+    # Plot words from bounding boxes
+    for _, row in boxes_qnr.iterrows():
+        if 'word' in row:
+            plt.text(row['x_min'], row['y_min'], row['word'], color='black', fontsize=8, verticalalignment='top')
+
     plt.scatter(
         fixation_df_ivt['centroid_x'], fixation_df_ivt['centroid_y'],
         c='blue', s=100, label='Fixations'
     )
 
-    # Annotate fixation numbers
     for i, row in fixation_df_ivt.iterrows():
         plt.text(row['centroid_x'], row['centroid_y'], str(i + 1), color='white', fontsize=12)
 
@@ -331,10 +350,52 @@ def plot_fixations(qnr, velocity_threshold=50):
     plt.savefig(os.path.join(output_folder, f'fixations_q{qnr}.png'))
     plt.close()
 
-# Plotting for all questions
-def plot_all_fixations(velocity_threshold=50):
+def plot_scanpath(qnr, velocity_threshold=50):
+    gaze_qnr = valid_gaze_data[valid_gaze_data['qnr'] == qnr]
+    boxes_qnr = bounding_boxes[bounding_boxes['qnr'] == qnr]
+
+    fixations_ivt = detect_fixations_ivt(gaze_qnr, velocity_threshold)
+    fixation_df_ivt = pd.DataFrame(fixations_ivt, columns=['start_time', 'end_time', 'centroid_x', 'centroid_y'])
+
+    plt.figure(figsize=(12, 8))
+    ax = plt.gca()
+
+    # Plot words from bounding boxes
+    for _, row in boxes_qnr.iterrows():
+        if 'word' in row:
+            plt.text(row['x_min'], row['y_min'], row['word'], color='black', fontsize=8, verticalalignment='top')
+
+    plt.scatter(
+        fixation_df_ivt['centroid_x'], fixation_df_ivt['centroid_y'],
+        color='blue', label='Fixations'
+    )
+
+    for i, row in fixation_df_ivt.iterrows():
+        plt.text(row['centroid_x'], row['centroid_y'], str(i + 1), color='white', fontsize=12)
+
+    plt.plot(
+        fixation_df_ivt['centroid_x'], fixation_df_ivt['centroid_y'],
+        linestyle='-', color='red', alpha=0.7, label='Scanpath'
+    )
+
+    plt.title(f'Scanpath Visualization for Question {qnr}')
+    plt.xlabel('X Coordinate')
+    plt.ylabel('Y Coordinate')
+    plt.xlim(0, SCREEN_WIDTH)
+    plt.ylim(0, SCREEN_HEIGHT)
+    plt.legend()
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_folder, f'scanpath_q{qnr}.png'))
+    plt.close()
+
+def plot_all_fixations(velocity_threshold=0.00001):
     for qnr in valid_gaze_data['qnr'].unique():
         plot_fixations(qnr, velocity_threshold)
 
-# Example usage
+def plot_all_scanpaths(velocity_threshold=0.00001):
+    for qnr in valid_gaze_data['qnr'].unique():
+        plot_scanpath(qnr, velocity_threshold)
+
 plot_all_fixations()
+plot_all_scanpaths()
