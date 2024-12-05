@@ -14,11 +14,13 @@ pygame.init()
 # Constants
 first_monitor = get_monitors()[0]
 SCREEN_WIDTH, SCREEN_HEIGHT = first_monitor.width, first_monitor.height
-FONT_SIZE = 40
+FONT_SIZE = 50
 FONT_COLOR = (0, 0, 0)
 BG_COLOR = (255, 255, 255)
-MARGIN = 28
-LINE_SPACING = 20
+MARGIN = 30
+LINE_SPACING = 25
+UPWARD_MARGIN = 12  # Adjust this value as needed
+DOWNWARD_MARGIN = 12  # Adjust this value as needed
 
 # Setup screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
@@ -42,8 +44,12 @@ def render_text(screen, text, x, y, font, max_width):
             current_y += FONT_SIZE + LINE_SPACING
             word_rect.topleft = (current_x, current_y)
 
+        # Adjust the bounding box upwards and downwards
+        word_rect.top -= UPWARD_MARGIN
+        word_rect.height += UPWARD_MARGIN + DOWNWARD_MARGIN
+
         # Draw word
-        screen.blit(word_surface, word_rect.topleft)
+        screen.blit(word_surface, (word_rect.left, word_rect.top + UPWARD_MARGIN))
 
         # Record bounding box
         word_boxes.append((word, word_rect))
@@ -126,9 +132,9 @@ def display_questions(questions):
             y_coords = [rect.top for _, rect in boxes] + [rect.bottom for _, rect in boxes]
             text_region = (
                 min(x_coords),
-                min(y_coords),
+                min(y_coords) - UPWARD_MARGIN,
                 max(x_coords),
-                max(y_coords)
+                max(y_coords) + DOWNWARD_MARGIN
             )
             text_regions.append(text_region)
 

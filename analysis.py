@@ -195,7 +195,7 @@ def plot_all_gaze_and_boxes():
     for qnr in valid_gaze_data['qnr'].unique():
         plot_gaze_and_boxes(qnr)
 
-#plot_all_gaze_and_boxes()
+plot_all_gaze_and_boxes()
 
 def plot_raw_gaze(qnr):
     # Filter data for the question
@@ -261,7 +261,7 @@ def plot_all_gaze_heatmaps():
     for qnr in valid_gaze_data['qnr'].unique():
         plot_gaze_heatmap(qnr)
 
-#plot_all_gaze_heatmaps()
+plot_all_gaze_heatmaps()
 
 def detect_fixations_ivt(data, velocity_threshold):
     """
@@ -316,7 +316,7 @@ def detect_fixations_ivt(data, velocity_threshold):
     print(f"Detected {len(fixations)} fixations.")
     return fixations
 
-def plot_fixations(qnr, velocity_threshold=50):
+def plot_fixations(qnr, velocity_threshold=10):
     gaze_qnr = valid_gaze_data[valid_gaze_data['qnr'] == qnr]
     boxes_qnr = bounding_boxes[bounding_boxes['qnr'] == qnr]
 
@@ -350,7 +350,7 @@ def plot_fixations(qnr, velocity_threshold=50):
     plt.savefig(os.path.join(output_folder, f'fixations_q{qnr}.png'))
     plt.close()
 
-def plot_scanpath(qnr, velocity_threshold=50):
+def plot_scanpath(qnr, velocity_threshold=10):
     gaze_qnr = valid_gaze_data[valid_gaze_data['qnr'] == qnr]
     boxes_qnr = bounding_boxes[bounding_boxes['qnr'] == qnr]
 
