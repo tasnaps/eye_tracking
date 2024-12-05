@@ -1,5 +1,3 @@
-# main.py
-
 import random
 import pandas as pd
 import pygame
@@ -82,9 +80,20 @@ def display_questions(questions):
     gaze_data_all = []  # To store all gaze data
 
     question_numbers = list(questions.keys())
+    question_numbers *= 2  # Repeat each question twice
     random.shuffle(question_numbers)
 
-    for qnr in question_numbers:
+    # Interleave questions with 3-7 other questions in between
+    interleaved_questions = []
+    while question_numbers:
+        qnr = question_numbers.pop(0)
+        interleaved_questions.append(qnr)
+        if question_numbers:
+            num_interleaved = random.randint(3, 7)
+            interleaved_questions.extend(question_numbers[:num_interleaved])
+            question_numbers = question_numbers[num_interleaved:]
+
+    for qnr in interleaved_questions:
         texts = questions[qnr]
 
         # Randomize the order of texts
