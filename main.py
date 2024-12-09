@@ -3,6 +3,7 @@ import pandas as pd
 import pygame
 import csv
 import time
+import os
 from screeninfo import get_monitors
 import hengam  # Import the hengam package
 
@@ -312,9 +313,19 @@ def save_gaze_data(gaze_data_all, output_file):
 # Main function
 def main():
     csv_file = "realSurveyQuestions.csv"  # Input CSV file
-    bounding_boxes_file = "bounding_boxes.csv"  # Output CSV file for bounding boxes
-    results_file = "results.csv"  # Output CSV file for participant selections
-    gaze_data_file = "gaze_data.csv"  # Output CSV file for gaze data
+    results_dir = "results"  # Directory to save results
+
+    # Create results directory if it doesn't exist
+    os.makedirs(results_dir, exist_ok=True)
+
+    # Determine the next participant number
+    participant_number = 1
+    while os.path.exists(os.path.join(results_dir, f"participant{participant_number}_results.csv")):
+        participant_number += 1
+
+    bounding_boxes_file = os.path.join(results_dir, f"participant{participant_number}_bounding_boxes.csv")
+    results_file = os.path.join(results_dir, f"participant{participant_number}_results.csv")
+    gaze_data_file = os.path.join(results_dir, f"participant{participant_number}_gaze_data.csv")
 
     questions = load_questions(csv_file)
     bounding_boxes, results, gaze_data_all = display_questions(questions)
